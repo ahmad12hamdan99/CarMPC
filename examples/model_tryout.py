@@ -1,9 +1,9 @@
 import numpy as np
 
-from lib.model import CarTrailerModel, CarTrailerDimension
-from lib.visualize_state import plot_graph
+from lib.simulator import CarTrailerSim, CarTrailerDimension
+from lib.visualize_state import plot_history
 
-model_ct = CarTrailerModel(use_CT=True, dt=0.01)
+model_ct = CarTrailerSim(use_CT=True, dt=0.01)
 
 car_states_ct, trailer_states_ct, inputs_ct = [], [], []
 for i in range(3000):
@@ -26,5 +26,5 @@ inputs_ct = np.array(inputs_ct)
 log_ct = {'car': car_states_ct, 'trailer': trailer_states_ct, 'inputs': inputs_ct}
 print(log_ct['car'][-1])
 
-plot_graph(log_ct, dt=0.01)
+plot_history(log_ct, dt=0.01)
 
