@@ -126,8 +126,9 @@ class CarTrailerSimWithAcc:
         self.psi_lower, self.psi_upper = -np.pi, np.pi  # rad
         self.gamma_lower, self.gamma_upper = -np.pi / 4, np.pi / 4  # rad
         self.v_lower, self.v_upper = -10, 10  # m/s
-        self.delta_lower, self.delta_upper = -np.pi / 4, np.pi / 4  # rad
-        self.acc_lower, self.acc_upper = -4, 3  # m/s^2
+        # Add some margins
+        self.delta_lower, self.delta_upper = -np.pi / 4 - 0.05, np.pi / 4 + 0.05  # rad
+        self.acc_lower, self.acc_upper = -2 - 0.05, 2 + 0.05  # m/s^2
 
     def reset(self, state: Union[np.ndarray, list] = np.zeros(5)) -> None:
         assert np.array(state).shape == (5,), f"The state should have shape (5,), but has shape{np.array(state).shape}"
@@ -184,6 +185,17 @@ class CarTrailerSimWithAcc:
         log['inputs'] = np.array([a, delta_f])
         return log
 
+    def check_input(self, control_input: Union[np.ndarray, list]) -> None:
+        """
+        Throws an assert if the input is outside the input constraints
+        :param control_input: A 1D array with to elements: [acceleration, steering angle]
+        """
+        a, delta_f = control_input
+        assert np.all([a, -a] <= [self.acc_upper, -self.acc_lower]), \
+            f"Acceleration should be between [{self.acc_lower, self.acc_upper}], but is {a}."
+        assert np.all([delta_f, -delta_f] <= [self.delta_upper, -self.delta_lower]), \
+            f"Steering angle should be between [{self.delta_lower:.3f}, {self.delta_upper:.3f}], but is {delta_f}."
+
     def step(self, control_input: Union[np.ndarray, list]) -> dict[str, np.ndarray]:
         """
         Updates the state with the input commands
@@ -192,6 +204,9 @@ class CarTrailerSimWithAcc:
         """
         # TODO: Check input constraints on delta_f and acceleration
         # TODO: Check constraints on state
+        # Check if the control input statisfy the constraints
+        self.check_input(control_input)
+
         if self.use_CT:
             self.state = self.dynamics_continuous(self.state, control_input)
         else:

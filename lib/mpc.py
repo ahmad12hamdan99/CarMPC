@@ -3,6 +3,9 @@ import cvxpy as cp
 import math
 from typing import Union
 
+import numpy.linalg
+from scipy.linalg import solve_discrete_are as dare
+
 from lib.simulator import CarTrailerDimension
 from lib.matrix_gen import predmod, costgen
 
@@ -13,6 +16,9 @@ class MPC:
                  N: int,
                  lin_state: Union[np.ndarray, list],
                  lin_input: Union[np.ndarray, list],
+                 terminal_constraint: bool = True,
+                 input_constraint: bool = True,
+                 state_constraint: bool = True,
                  ) -> None:
         """
         Initialize the MPC controller
@@ -24,11 +30,14 @@ class MPC:
         self.dt = dt
         self.N = N
         self.nx, self.nu = 5, 2
-        self.Q = np.diag([3, 3, 1, 1, 1])
-        self.R = np.diag([2, 0])
-        self.P = np.zeros((5, 5))  # Should be result from DARE equation
+        self.Q = np.diag([1, 1, 10, 10, 3])  # [3, 3, 1, 1, 1]
+        self.R = np.eye(self.nu) * 5
         self.goal = np.array([0, 0, 0, 0, 0])
         self.x_horizon = None
+
+        self.terminal_constraint_bool = terminal_constraint
+        self.input_constraint_bool = input_constraint
+        self.state_constraint_bool = state_constraint
 
         self.lin_state = np.array(lin_state) if isinstance(lin_state, list) else lin_state
         self.lin_input = np.array(lin_input) if isinstance(lin_input, list) else lin_input
@@ -36,16 +45,45 @@ class MPC:
         A_lin, B_lin = self.linearized_model(self.lin_state, self.lin_input)
         self.A, self.B = self.discretized_model(A_lin, B_lin, dt)
 
+        # Solve the discrete algebraic Riccati equation
+        try:
+            self.P = dare(self.A, self.B, self.Q, self.R)
+        except numpy.linalg.LinAlgError:
+            print("\nNOT POSSIBLE TO SOLVE DARE\n")
+            self.P = np.zeros((5, 5))
         # Generate the prediction model and cost function matrices
         self.T, self.S = predmod(self.A, self.B, self.N)
         self.H, self.h, _ = costgen(self.Q, self.R, self.P, self.T, self.S, self.nx)
+
+        # Define input constraints: [acceleration, steering angle]
+        self.input_upper = np.array([2, np.pi / 8])
+        self.input_lower = -self.input_upper
+
+        # Define state constraints:
+        self.gamma_lower, self.gamma_upper = - np.pi / 4, np.pi / 4
+        self.x_lower, self.x_upper = -30, 30
+        self.y_lower, self.y_upper = -3, 3
+        self.v_lower, self.v_upper = 0, 5
+        self.psi_lower, self.psi_upper = -np.pi/4, np.pi/4
+
+        # Define state constraints as functions:
 
     @staticmethod
     def linearized_model(lin_state: np.ndarray, lin_input: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
         This function returns the linearized state space model for the car with a trailer dynamics.
         The original model is from (equation 1): https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=281527b8c72787dd51f167d0669cb31097bd21f6
-        I added the velocity to make it a bit broader usable.
+        The velocity was added to make it a bit broader usable.
+            state x: [x, y, psi, gamma, v]
+                x: x-position of the car
+                y: y-position of the car
+                psi: orientation of the car in the 2D plane
+                gamma: angle between the car and the trailer, defined as the difference in orientation. Straight combination has a gamma of zero.
+                v: velocity of the car
+            inputs u: [a, delta_f]
+                a: acceleration of the car
+                delta_f: steering angle of the car
+
         :param lin_state: The state around which to linearize
         :param lin_input: The input around which to linearize
         :return: The A and B matrix (in x' = Ax + Bu) of the linearized model
@@ -98,13 +136,141 @@ class MPC:
         """
         assert np.array(goal).shape == (5,)
         # check if the goal is an equilibrium state: x+ = x with u = 0
-        assert np.all(goal == self.A @ goal)
-        # Since it is linearized around a speed > 0, this does not really work, bc psi != throws an error
+        assert np.all(goal == self.A @ goal), \
+            "Goal is not an equilibrium point. At least not for the linearized model. E.g. psi != 0 is not an equilibrium point."
+        # Since it is linearized around a speed > 0, this is quite strict, because psi != 0 throws an error
 
         self.goal = np.array(goal) if isinstance(goal, list) else goal
 
-    def constraints(self):
-        return []
+    def terminal_constraint(self, x, u) -> list[cp.constraints]:
+        """
+        Create the constraint for the terminal set in this function
+        A x <= b
+            x = the state sequence with a variable length depending on the horizon
+        :param x: the state sequence; the type is some cvxpy expression
+        :param u: the input sequence; the type is some cvxpy expression
+        :return: cvxpy compatible constraint
+        """
+        # Add the terminal constraint
+        A = np.zeros((2 * self.nx, (self.N + 1) * self.nx))
+        # A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.eye(self.nx)  # state <= ...
+        # A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.eye(self.nx)  # -state <= ...
+
+        # ### ONLY CONSTRAINT ON X AND Y
+        # A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 0, 0, 0])  # state <= ...
+        # A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 0, 0, 0])  # -state <= ...
+
+        # ### ONLY CONSTRAINT ON X, Y AND PSI
+        A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 1, 0, 0])  # state <= ...
+        A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 1, 0, 0])  # -state <= ...
+
+        b = np.hstack((self.goal, -self.goal))
+
+        A, b = np.vstack(A).squeeze(), np.vstack(b).squeeze()
+        return [A @ x <= b]
+
+    def input_constraint(self, x, u) -> list[cp.constraints]:
+        """
+        Create the constraint for inputs in this function
+        A u <= b
+            u = the input sequence with a variable length depending on the horizon
+        :param x: the state sequence; the type is some cvxpy expression
+        :param u: the input sequence; the type is some cvxpy expression
+        :return: cvxpy compatible constraint
+        """
+        assert self.nu == len(self.input_upper), \
+            f"Number of inputs ({self.nu}) is different from number of upper inputs boundaries ({len(self.input_upper)})"
+        assert self.nu == len(self.input_lower), \
+            f"Number of inputs ({self.nu}) is different from number of upper inputs boundaries ({len(self.input_lower)})"
+
+        A = np.vstack((np.eye(self.N * self.nu), -np.eye(self.N * self.nu)))
+        b = np.vstack(((self.input_upper,) * self.N, (-self.input_lower,) * self.N)).flatten()
+
+        return [A @ u <= b]
+
+    def state_constraint(self, x, u) -> list[cp.constraints]:
+        """
+        Create the constraint for state (except from the terminal constraint) in this function
+        A x <= b
+            x = the state sequence with a variable length depending on the horizon
+        :param x: the state sequence; the type is some cvxpy expression
+        :param u: the input sequence; the type is some cvxpy expression
+        :return: cvxpy compatible constraint
+        """
+        A, b = [], []
+        # Constraint on gamma to prevent jackknifing of the car and trailer
+        # on all states, also x(0): does not really make sense since it cannot be steered, but shouldn't be a problem anyway
+        # ======= DOES NOT WORK WITH THE LINEARIZED MODEL =======
+        A_gamma = np.zeros((2 * (self.N + 1), (self.N + 1) * self.nx))
+        di_1 = (np.arange(self.N + 1), np.arange(self.N + 1) * self.nx + 3)
+        A_gamma[di_1] = 1
+        di_2 = (np.arange(self.N + 1) + (self.N + 1), np.arange(self.N + 1) * self.nx + 3)
+        A_gamma[di_2] = -1
+        A.append(A_gamma)
+
+        b_gamma = np.hstack(((self.gamma_upper,) * (self.N + 1), (-self.gamma_lower,) * (self.N + 1)))
+        b.append(b_gamma)
+
+        # ============== SHOULD REMOVE ALL CONSTRAINTS ON x(0)
+        # x upper and lower bounds
+        A_x = np.zeros((2 * (self.N + 1), (self.N + 1) * self.nx))
+        di_1 = (np.arange(self.N + 1), np.arange(self.N + 1) * self.nx + 0)
+        A_x[di_1] = 1
+        di_2 = (np.arange(self.N + 1) + (self.N + 1), np.arange(self.N + 1) * self.nx + 0)
+        A_x[di_2] = -1
+        A.append(A_x)
+
+        b_x = np.hstack(((self.x_upper,) * (self.N + 1), (-self.x_lower,) * (self.N + 1)))
+        b.append(b_x)
+
+        # y upper and lower bounds
+        A_y = np.zeros((2 * (self.N + 1), (self.N + 1) * self.nx))
+        di_1 = (np.arange(self.N + 1), np.arange(self.N + 1) * self.nx + 1)
+        A_y[di_1] = 1
+        di_2 = (np.arange(self.N + 1) + (self.N + 1), np.arange(self.N + 1) * self.nx + 1)
+        A_y[di_2] = -1
+        A.append(A_y)
+
+        b_y = np.hstack(((self.y_upper,) * (self.N + 1), (-self.y_lower,) * (self.N + 1)))
+        b.append(b_y)
+
+        # v upper and lower bounds
+        A_v = np.zeros((2 * (self.N + 1), (self.N + 1) * self.nx))
+        di_1 = (np.arange(self.N + 1), np.arange(self.N + 1) * self.nx + 4)
+        A_v[di_1] = 1
+        di_2 = (np.arange(self.N + 1) + (self.N + 1), np.arange(self.N + 1) * self.nx + 4)
+        A_v[di_2] = -1
+        A.append(A_v)
+
+        b_v = np.hstack(((self.v_upper,) * (self.N + 1), (-self.v_lower,) * (self.N + 1)))
+        b.append(b_v)
+
+        # psi upper and lower bounds
+        A_psi = np.zeros((2 * (self.N + 1), (self.N + 1) * self.nx))
+        di_1 = (np.arange(self.N + 1), np.arange(self.N + 1) * self.nx + 2)
+        A_psi[di_1] = 1
+        di_2 = (np.arange(self.N + 1) + (self.N + 1), np.arange(self.N + 1) * self.nx + 2)
+        A_psi[di_2] = -1
+        A.append(A_psi)
+
+        b_psi = np.hstack(((self.psi_upper,) * (self.N + 1), (-self.psi_lower,) * (self.N + 1)))
+        b.append(b_psi)
+
+        # additional constraint: -0.2x + y <= -1.5
+        car_constraint_A = [-0.15, 1, 0, 0, 0]
+        car_constraint_b = -1.5
+        A_car = np.zeros((self.N, (self.N + 1) * self.nx))
+        for i in range(self.N):
+            A_car[i, (i + 1) * self.nx:(i + 2) * self.nx] = car_constraint_A
+        A.append(A_car)
+
+        b_car = np.hstack(((car_constraint_b,) * (self.N)))
+        b.append(b_car)
+
+        A = np.vstack(A)
+        b = np.hstack(b)
+
+        return [A @ x <= b]
 
     def step(self, x0) -> np.ndarray:
         """
@@ -112,16 +278,28 @@ class MPC:
         :param x0: the current state
         :return: returns the first action of the optimal control sequence
         """
+
         u = cp.Variable((self.N * self.nu))
+        x = self.T @ x0 + self.S @ u
         x0 = x0 - self.goal
         objective = cp.Minimize(1 / 2 * cp.quad_form(u, self.H) + self.h @ x0 @ u)
-        constraints = self.constraints()
+
+        constraints = []
+        if self.terminal_constraint_bool:
+            constraints += self.terminal_constraint(x, u)
+        if self.input_constraint_bool:
+            constraints += self.input_constraint(x, u)
+        if self.state_constraint_bool:
+            constraints += self.state_constraint(x, u)
+
         problem = cp.Problem(objective, constraints)
         result = problem.solve()
         if math.isinf(result):
             assert False, "No feasible solution"
 
+        # Save for visualisation purposes
         self.x_horizon = self.T @ x0 + self.S @ u.value
         self.x_horizon = self.x_horizon.reshape(-1, self.nx) + self.goal
+        self.u_horizon = u.value.reshape(-1, 2)
 
-        return u.value[:2]
+        return u.value[:self.nu]
