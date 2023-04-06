@@ -61,7 +61,7 @@ class MPC:
 
         # Define state constraints:
         self.gamma_lower, self.gamma_upper = - np.pi / 4, np.pi / 4
-        self.x_lower, self.x_upper = -30, 30
+        self.x_lower, self.x_upper = -30, 50
         self.y_lower, self.y_upper = -3, 3
         self.v_lower, self.v_upper = 0, 5
         self.psi_lower, self.psi_upper = -np.pi/4, np.pi/4
@@ -211,17 +211,17 @@ class MPC:
         b_gamma = np.hstack(((self.gamma_upper,) * (self.N + 1), (-self.gamma_lower,) * (self.N + 1)))
         b.append(b_gamma)
 
-        # ============== SHOULD REMOVE ALL CONSTRAINTS ON x(0)
+        # ============== TODO: SHOULD REMOVE ALL CONSTRAINTS ON x(0)
         # x upper and lower bounds
-        A_x = np.zeros((2 * (self.N + 1), (self.N + 1) * self.nx))
-        di_1 = (np.arange(self.N + 1), np.arange(self.N + 1) * self.nx + 0)
-        A_x[di_1] = 1
-        di_2 = (np.arange(self.N + 1) + (self.N + 1), np.arange(self.N + 1) * self.nx + 0)
-        A_x[di_2] = -1
-        A.append(A_x)
-
-        b_x = np.hstack(((self.x_upper,) * (self.N + 1), (-self.x_lower,) * (self.N + 1)))
-        b.append(b_x)
+        # A_x = np.zeros((2 * (self.N + 1), (self.N + 1) * self.nx))
+        # di_1 = (np.arange(self.N + 1), np.arange(self.N + 1) * self.nx + 0)
+        # A_x[di_1] = 1
+        # di_2 = (np.arange(self.N + 1) + (self.N + 1), np.arange(self.N + 1) * self.nx + 0)
+        # A_x[di_2] = -1
+        # A.append(A_x)
+        #
+        # b_x = np.hstack(((self.x_upper,) * (self.N + 1), (-self.x_lower,) * (self.N + 1)))
+        # b.append(b_x)
 
         # y upper and lower bounds
         A_y = np.zeros((2 * (self.N + 1), (self.N + 1) * self.nx))
@@ -256,9 +256,20 @@ class MPC:
         b_psi = np.hstack(((self.psi_upper,) * (self.N + 1), (-self.psi_lower,) * (self.N + 1)))
         b.append(b_psi)
 
-        # additional constraint: -0.2x + y <= -1.5
+        # additional constraint: -0.15x + y <= -1.5
         car_constraint_A = [-0.15, 1, 0, 0, 0]
         car_constraint_b = -1.5
+        A_car = np.zeros((self.N, (self.N + 1) * self.nx))
+        for i in range(self.N):
+            A_car[i, (i + 1) * self.nx:(i + 2) * self.nx] = car_constraint_A
+        A.append(A_car)
+
+        b_car = np.hstack(((car_constraint_b,) * (self.N)))
+        b.append(b_car)
+
+        # additional constraint: -0.15x + y >= -3.75 --> 0.15x - y <= 3.75
+        car_constraint_A = [0.15, -1, 0, 0, 0]
+        car_constraint_b = 3.75
         A_car = np.zeros((self.N, (self.N + 1) * self.nx))
         for i in range(self.N):
             A_car[i, (i + 1) * self.nx:(i + 2) * self.nx] = car_constraint_A

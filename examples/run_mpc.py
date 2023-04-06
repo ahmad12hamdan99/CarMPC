@@ -9,9 +9,8 @@ from lib.visualize_state import plot_live, plot_history, plot_graphs
 DT_CONTROL = 0.2  # s
 DT_SIMULATION = 0.01  # s
 STEPS_UPDATE = int(DT_CONTROL / DT_SIMULATION)
-# STEPS_UPDATE = 5
+
 # Set up the MPC controller
-# [0, 0, 0.1, -0.1, -1]
 controller = MPC(dt=DT_CONTROL, N=40, lin_state=[0, 0, 0, 0, 3], lin_input=[0, 0], terminal_constraint=True,
                  input_constraint=True, state_constraint=True)
 controller.set_goal([30, 1.5, 0, 0, 0])
@@ -34,23 +33,13 @@ for i in itertools.count():
     if i % STEPS_UPDATE == 0:
         print(f"Speed: {log['car'][4]}")
         control_input = controller.step(simulation.state)
-        pred_gamma = np.max(controller.x_horizon[:, 3])
-        if pred_gamma > max_pred_gamma:
-            max_pred_gamma = pred_gamma
-            print(f"new max pred gamma: \t{max_pred_gamma}")
-        if simulation.state[3] > max_gamma:
-            max_gamma = simulation.state[3]
-            print(f"new max gamma: \t{max_gamma}")
-        # print(f"input: {control_input}")
-        # print(f"state: {simulation.state}")
-        # print("=" * 30)
         plot_live(log, dt=0.01, time=simulation.time, goal=controller.goal, state_horizon=controller.x_horizon,
-                  lim=[(-10, 50), (-15, 15)])
+                  lim=[(-10, 50), (-10, 10)])
 
     if np.all(np.abs(simulation.state - controller.goal) <= 1e-1).astype(bool):
         break
         # simulation.reset(np.array(start_position))
 
 log_history = {'car': np.array(car_states), 'trailer': np.array(trailer_states), 'inputs': np.array(inputs)}
-# plot_history(log_history, dt=DT_SIMULATION)
+plot_history(log_history, dt=DT_SIMULATION, goal=controller.goal, lim=[(-10, 50), (-10, 10)])
 plot_graphs(log_history, dt=DT_SIMULATION)
