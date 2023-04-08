@@ -1,7 +1,7 @@
 import numpy as np
 import itertools
 
-from lib.mpc import MPC
+from lib.mpc import MPCStateFB
 from lib.simulator import CarTrailerSimWithAcc, CarTrailerDimension
 from lib.visualize_state import plot_live
 
@@ -12,7 +12,7 @@ STEPS_UPDATE = int(0.1 / 0.01)
 
 # Set up the MPC controller
 # [0, 0, 0.1, -0.1, -1]
-controller = MPC(dt=DT_CONTROL, N=20, lin_state=[0, 0, 0, 0, -2], lin_input=[0, 0], terminal_constraint=False, input_constraint=True, state_constraint=True)
+controller = MPCStateFB(dt=DT_CONTROL, N=20, lin_state=[0, 0, 0, 0, -2], lin_input=[0, 0], terminal_constraint=False, input_constraint=True, state_constraint=True)
 controller.set_goal([-20, -1, 0, 0, 0])
 
 # Set up the simulation environment (uses the same non-linearized model with a smaller timestep
