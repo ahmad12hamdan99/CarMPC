@@ -148,8 +148,8 @@ class MPCStateFB(MPC):
         super().__init__(dt, N, lin_state, lin_input, env)
 
         self.nx, self.nu = 5, 2
-        self.Q = np.diag([1, 1, 10, 10, 3])  # [3, 3, 1, 1, 1]
-        self.R = np.eye(self.nu) * 5
+        self.Q = np.diag([3, 3, 10, 0, 11])  # [1, 1, 10, 10, 3] # [3, 3, 1, 1, 1]
+        self.R = np.eye(self.nu) * 10
 
         self.terminal_constraint_bool = terminal_constraint
         self.input_constraint_bool = input_constraint
@@ -159,7 +159,8 @@ class MPCStateFB(MPC):
         try:
             self.P = dare(self.A, self.B, self.Q, self.R)
         except numpy.linalg.LinAlgError:
-            print("\nNOT POSSIBLE TO SOLVE DARE\n")
+            # print("\nNOT POSSIBLE TO SOLVE DARE\n")
+            assert False, ("\nNOT POSSIBLE TO SOLVE DARE\n")
             self.P = np.zeros((5, 5))
         # Generate the prediction model and cost function matrices
         self.T, self.S = predmod(self.A, self.B, self.N)
@@ -170,16 +171,16 @@ class MPCStateFB(MPC):
         self.input_lower = -self.input_upper
 
         # Define state constraints:
-        self.gamma_lower, self.gamma_upper = - np.pi / 4, np.pi / 4
-        self.x_lower, self.x_upper = -30, 50
-        self.y_lower, self.y_upper = -3, 3
-        self.v_lower, self.v_upper = 0, 5
-        self.psi_lower, self.psi_upper = -np.pi/4, np.pi/4
+        # self.gamma_lower, self.gamma_upper = - np.pi / 4, np.pi / 4
+        # self.x_lower, self.x_upper = -30, 50
+        # self.y_lower, self.y_upper = -3, 3
+        # self.v_lower, self.v_upper = 0, 5
+        # self.psi_lower, self.psi_upper = -np.pi/4, np.pi/4
 
         # State constraints to stay close to the linearized state:
         # -pi/4 <= psi <= pi/4
         self.state_const_A += [[0, 0, 1, 0, 0], [0, 0, -1, 0, 0]]
-        self.state_const_b += [np.pi / 4, np.pi / 4]
+        self.state_const_b += [np.pi / 8, np.pi / 8]
         # -pi/4 <= gamma <= pi/4
         self.state_const_A += [[0, 0, 0, 1, 0], [0, 0, 0, -1, 0]]
         self.state_const_b += [np.pi/4, np.pi/4]
@@ -191,7 +192,7 @@ class MPCStateFB(MPC):
         # Check lengths of constraints
         self.check_constraints()
 
-    def terminal_constraint(self, x, u) -> list[cp.constraints]:
+    def terminal_constraint(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Create the constraint for the terminal set in this function
         A x <= b
@@ -213,12 +214,16 @@ class MPCStateFB(MPC):
         A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 1, 0, 0])  # state <= ...
         A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 1, 0, 0])  # -state <= ...
 
+        # ### ONLY CONSTRAINT ON X, Y, PSI AND V
+        # A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 1, 1, 0])  # state <= ...
+        # A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 1, 1, 0])  # -state <= ...
+
         b = np.hstack((self.goal, -self.goal))
 
         A, b = np.vstack(A).squeeze(), np.vstack(b).squeeze()
-        return [A @ x <= b]
+        return A, b
 
-    def input_constraint(self, x, u) -> list[cp.constraints]:
+    def input_constraint(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Create the constraint for inputs in this function
         A u <= b
@@ -235,9 +240,9 @@ class MPCStateFB(MPC):
         A = np.vstack((np.eye(self.N * self.nu), -np.eye(self.N * self.nu)))
         b = np.vstack(((self.input_upper,) * self.N, (-self.input_lower,) * self.N)).flatten()
 
-        return [A @ u <= b]
+        return A, b
 
-    def state_constraint(self, x, u) -> list[cp.constraints]:
+    def state_constraint(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Create the constraint for state (except from the terminal constraint) in this function
         A x <= b
@@ -348,10 +353,8 @@ class MPCStateFB(MPC):
 
         A = np.vstack(A)
         b = np.hstack(b)
-        self.A_state_constraint = A
-        self.b_state_constraint = b
 
-        return [A @ x <= b]
+        return A, b
 
     def step(self, x0) -> np.ndarray:
         """
@@ -367,11 +370,14 @@ class MPCStateFB(MPC):
 
         constraints = []
         if self.terminal_constraint_bool:
-            constraints += self.terminal_constraint(x, u)
+            A, b = self.terminal_constraint()
+            constraints += [A @ x <= b]
         if self.input_constraint_bool:
-            constraints += self.input_constraint(x, u)
+            A, b = self.input_constraint()
+            constraints += [A @ u <= b]
         if self.state_constraint_bool:
-            constraints += self.state_constraint(x, u)
+            A, b = self.state_constraint()
+            constraints += [A @ x <= b]
 
         problem = cp.Problem(objective, constraints)
         result = problem.solve()
@@ -383,5 +389,9 @@ class MPCStateFB(MPC):
         self.x_horizon = self.T @ x0 + self.S @ u.value
         self.x_horizon = self.x_horizon.reshape(-1, self.nx) + self.goal
         self.u_horizon = u.value.reshape(-1, 2)
+
+        # if True:
+        #     K = np.linalg.inv(self.R + self.B.T @ self.P @ self.B) @ self.B.T @ self.P @ self.A
+        #     return K @ x0
 
         return u.value[:self.nu]

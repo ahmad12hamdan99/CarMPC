@@ -4,18 +4,20 @@ import itertools
 from lib.mpc import MPCStateFB
 from lib.simulator import CarTrailerSimWithAcc, CarTrailerDimension
 from lib.visualize_state import plot_live, plot_history, plot_graphs
-from lib.environments import RoadEnv, RoadOneCarEnv, RoadMultipleCarsEnv
+from lib.environments import *
 
 # Simulation runs at a higher rate than the MPC controller
 DT_CONTROL = 0.2  # s
 DT_SIMULATION = 0.01  # s
 STEPS_UPDATE = int(DT_CONTROL / DT_SIMULATION)
+LINEARIZE_STATE = [0, 0, 0, 0, 3]
+LINEARIZE_INPUT = [0, 0]
 
 # Set up the environment
 environment = RoadMultipleCarsEnv()
 
 # Set up the MPC controller
-controller = MPCStateFB(dt=DT_CONTROL, N=40, lin_state=[0, 0, 0, 0, 3], lin_input=[0, 0], terminal_constraint=True,
+controller = MPCStateFB(dt=DT_CONTROL, N=40, lin_state=LINEARIZE_STATE, lin_input=LINEARIZE_INPUT, terminal_constraint=True,
                         input_constraint=True, state_constraint=True, env=environment)
 controller.set_goal(environment.goal)
 
@@ -35,7 +37,6 @@ for i in itertools.count():
     inputs.append(log['inputs'])
 
     if i % STEPS_UPDATE == 0:
-        print(f"Speed: {log['car'][4]}")
         control_input = controller.step(simulation.state)
         plot_live(log, dt=0.01, time=simulation.time, goal=controller.goal, state_horizon=controller.x_horizon,
                   lim=[(-10, 50), (-10, 10)], env=environment)

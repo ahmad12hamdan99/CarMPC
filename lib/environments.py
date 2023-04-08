@@ -102,8 +102,8 @@ class RoadMultipleCarsEnv(RoadEnv):
         super().__init__()
         # Define constraints which involve multiple states: e.g. lines in the 2D plane
         # A @ x <= b
-        self.constraints_A += [[-0.15, 1, 0, 0, 0], [0.15, -1, 0, 0, 0]]
-        self.constraints_b += [-1.5, 3.75]
+        self.constraints_A += [[-0.25, 1, 0, 0, 0], [0.25, -1, 0, 0, 0]]
+        self.constraints_b += [-2, 6.25]
 
         self.check_constraints()
         self.goal = [30, 1.5, 0, 0, 0]
@@ -121,14 +121,14 @@ class RoadMultipleCarsEnv(RoadEnv):
         super().plot(lim)
         ax = plt.gca()
         # Car 1
-        car_constraint_A = [-0.15, 1, 0, 0, 0]
-        car_constraint_b = -1.5
+        car_constraint_A = self.constraints_A[-2]
+        car_constraint_b = self.constraints_b[-2]
         x = np.linspace(*self.x_lim, 2)
         y = (-car_constraint_A[0] * x + car_constraint_b) / car_constraint_A[1]
         plt.plot(x, y, color=(0.91, 0.8, 0.18), linestyle='--')
         plt.fill_between(x, y, self.y_lim[1], color=(0.91, 0.8, 0.18, 0.1))
         for i in range(3):
-            ax.add_patch(patches.Rectangle((0 - i * 1.25 * CarTrailerDimension.car_length,
+            ax.add_patch(patches.Rectangle((-1 - i * 1.25 * CarTrailerDimension.car_length,
                                             1.5 - CarTrailerDimension.car_width / 2),
                                            CarTrailerDimension.car_length,
                                            CarTrailerDimension.car_width,
@@ -137,8 +137,8 @@ class RoadMultipleCarsEnv(RoadEnv):
                                            ))
 
         # Car 2
-        car_constraint_A = [-0.15, 1, 0, 0, 0]
-        car_constraint_b = -3.75
+        car_constraint_A = self.constraints_A[-1]
+        car_constraint_b = self.constraints_b[-1]
         x = np.linspace(*self.x_lim, 2)
         y = (-car_constraint_A[0] * x + car_constraint_b) / car_constraint_A[1]
         plt.plot(x, y, color=(0.78, 0.18, 0.91), linestyle='--')
