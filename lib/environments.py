@@ -36,12 +36,12 @@ class RoadEnv(BaseEnv):
     def __init__(self):
         super().__init__()
         # -3 <= y <= 3
-        self.constraints_A += [[0, 1, 0, 0, 0], [0, -1, 0, 0, 0]]
+        self.constraints_A += [[0, 1, 0, 0], [0, -1, 0, 0]]
         self.constraints_b += [3, 3]
         self.y_lower, self.y_upper = -3, 3  # for plotting
 
         self.check_constraints()
-        self.goal = [30, 1.5, 0, 0, 0]
+        self.goal = [30, 1.5, 0, 0]
 
         # For the legend of the plot
         grey_patch = patches.Patch(color=(0.6, 0.6, 0.6), label='Road boundaries')
@@ -65,11 +65,11 @@ class RoadOneCarEnv(RoadEnv):
         super().__init__()
         # Define constraints which involve multiple states: e.g. lines in the 2D plane
         # A @ x <= b
-        self.constraints_A += [[1, 0, 0, 0, 0]]
+        self.constraints_A += [[1, 0, 0, 0]]
         self.constraints_b += [30]
 
         self.check_constraints()
-        self.goal = [30, -1.5, 0, 0, 0]
+        self.goal = [30, -1.5, 0, 0]
 
         # For the legend of the plot
         yellow_patch = patches.Patch(color=(0.91, 0.8, 0.18), label='Obstacles')
@@ -102,11 +102,11 @@ class RoadMultipleCarsEnv(RoadEnv):
         super().__init__()
         # Define constraints which involve multiple states: e.g. lines in the 2D plane
         # A @ x <= b
-        self.constraints_A += [[-0.25, 1, 0, 0, 0], [0.25, -1, 0, 0, 0]]
+        self.constraints_A += [[-0.25, 1, 0, 0], [0.25, -1, 0, 0]]
         self.constraints_b += [-2, 6.25]
 
         self.check_constraints()
-        self.goal = [30, 1.5, 0, 0, 0]
+        self.goal = [30, 1.5, 0, 0]
 
         # For the legend of the plot
         yellow_patch = patches.Patch(color=(0.91, 0.8, 0.18), label='Obstacles')

@@ -35,8 +35,6 @@ def plot_history(log_data: dict[str, np.ndarray],
 
     interval = len(time_range) - 1
     x_car, y_car, psi_car = log_data['car'][::interval, 0], log_data['car'][::interval, 1], log_data['car'][::interval, 2]
-    x_trailer, y_trailer, psi_trailer = log_data['trailer'][::interval, 0], log_data['trailer'][::interval, 1], \
-        log_data['trailer'][::interval, 2]
 
     for i in range(len(x_car)):
         t_car = transforms.Affine2D().rotate_around(x_car[i], y_car[i], psi_car[i])
@@ -49,36 +47,12 @@ def plot_history(log_data: dict[str, np.ndarray],
                               ))
         c_car.set_transform(t_car + ax.transData)
 
-        t_trailer = transforms.Affine2D().rotate_around(x_trailer[i], y_trailer[i], psi_trailer[i])
-        c_trailer = ax.add_patch(
-            patches.Rectangle((x_trailer[i] - (
-                    CarTrailerDimension.trailer_length - CarTrailerDimension.l2),
-                               y_trailer[i] - CarTrailerDimension.trailer_width / 2),
-                              CarTrailerDimension.trailer_length - CarTrailerDimension.triangle_length,
-                              CarTrailerDimension.trailer_width,
-                              edgecolor='r',
-                              facecolor='none',
-                              ))
-        c_trailer.set_transform(t_trailer + ax.transData)
-        c_trailer_triangle = ax.add_patch(
-            patches.Polygon([[x_trailer[i] + CarTrailerDimension.l2 - CarTrailerDimension.triangle_length,
-                              y_trailer[i] - CarTrailerDimension.trailer_width / 2],
-                             [x_trailer[i] + CarTrailerDimension.l2 - CarTrailerDimension.triangle_length,
-                              y_trailer[i] + CarTrailerDimension.trailer_width / 2],
-                             [x_trailer[i] + CarTrailerDimension.l2, y_trailer[i]]],
-                            edgecolor='r',
-                            facecolor='none',
-                            ))
-        c_trailer_triangle.set_transform(t_trailer + ax.transData)
-
     if goal is not None:
         plt.scatter(goal[0], goal[1], marker="*", c='lime')
 
     plt.title(f"The position of the car and trailer")
     plt.scatter(x_car, y_car, label='car', c='b')
-    plt.scatter(x_trailer, y_trailer, label='trailer', c='r')
     plt.plot(log_data['car'][..., 0], log_data['car'][..., 1], label='car traject', c='b', linestyle='--')
-    plt.plot(log_data['trailer'][..., 0], log_data['trailer'][..., 1], label='trailer traject', c='r', linestyle='--')
     handles, _ = ax.get_legend_handles_labels()
     ax.legend(loc='upper center', handles=handles + env.handles,
               bbox_to_anchor=(0.5, -0.15),
@@ -119,7 +93,6 @@ def plot_live(log_data: dict[str, np.ndarray],
         env.plot(lim)
 
     x_car, y_car, psi_car = log_data['car'][0], log_data['car'][1], log_data['car'][2]
-    x_trailer, y_trailer, psi_trailer = log_data['trailer'][0], log_data['trailer'][1], log_data['trailer'][2]
     t_car = transforms.Affine2D().rotate_around(x_car, y_car, psi_car)
     c_car = ax.add_patch(
         patches.Rectangle((x_car - CarTrailerDimension.l12, y_car - CarTrailerDimension.car_width / 2),
@@ -130,28 +103,6 @@ def plot_live(log_data: dict[str, np.ndarray],
                           ))
     c_car.set_transform(t_car + ax.transData)
 
-    t_trailer = transforms.Affine2D().rotate_around(x_trailer, y_trailer, psi_trailer)
-    c_trailer = ax.add_patch(
-        patches.Rectangle((x_trailer - (
-                CarTrailerDimension.trailer_length - CarTrailerDimension.l2),
-                           y_trailer - CarTrailerDimension.trailer_width / 2),
-                          CarTrailerDimension.trailer_length - CarTrailerDimension.triangle_length,
-                          CarTrailerDimension.trailer_width,
-                          edgecolor='r',
-                          facecolor='none',
-                          ))
-    c_trailer.set_transform(t_trailer + ax.transData)
-    c_trailer_triangle = ax.add_patch(
-        patches.Polygon([[x_trailer + CarTrailerDimension.l2 - CarTrailerDimension.triangle_length,
-                          y_trailer - CarTrailerDimension.trailer_width / 2],
-                         [x_trailer + CarTrailerDimension.l2 - CarTrailerDimension.triangle_length,
-                          y_trailer + CarTrailerDimension.trailer_width / 2],
-                         [x_trailer + CarTrailerDimension.l2, y_trailer]],
-                        edgecolor='r',
-                        facecolor='none',
-                        ))
-    c_trailer_triangle.set_transform(t_trailer + ax.transData)
-
     if goal is not None:
         plt.scatter(goal[0], goal[1], marker="*", c='lime')
 
@@ -161,7 +112,6 @@ def plot_live(log_data: dict[str, np.ndarray],
     plt.title(f"The position of the car and trailer" if time is None
               else f"The position of the car and trailer (t = {time: .1f} s)")
     plt.scatter(x_car, y_car, label='car', c='b')
-    plt.scatter(x_trailer, y_trailer, label='trailer', c='r')
     handles, _ = ax.get_legend_handles_labels()
     ax.legend(loc='upper center', handles=handles + env.handles,
               bbox_to_anchor=(0.5, -0.15),
@@ -231,10 +181,10 @@ def plot_graphs(log_data: dict[str, np.ndarray], dt: float = 0.01) -> None:
     """
     plt.figure()
     time_range = np.arange(len(log_data['car'])) * dt
-    fig, axs = plt.subplots(5, 1, figsize=(5, 15), constrained_layout=True)
+    fig, axs = plt.subplots(4, 1, figsize=(5, 12), constrained_layout=True)
     fig.suptitle("Car states")
-    titles = ['x', 'y', '\psi', '\gamma', 'v']
-    units = ['m', 'm', 'rad', 'rad', 'm/s']
+    titles = ['x', 'y', '\psi', 'v']
+    units = ['m', 'm', 'rad', 'm/s']
     for i in range(len(axs)):
         ax = axs[i]
         ax.plot(time_range, log_data['car'][..., i])

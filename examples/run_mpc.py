@@ -10,7 +10,7 @@ from lib.environments import *
 DT_CONTROL = 0.2  # s
 DT_SIMULATION = 0.01  # s
 STEPS_UPDATE = int(DT_CONTROL / DT_SIMULATION)
-LINEARIZE_STATE = [0, 0, 0, 0, 3]
+LINEARIZE_STATE = [0, 0, 0, 3]
 LINEARIZE_INPUT = [0, 0]
 
 # Set up the environment
@@ -23,17 +23,16 @@ controller.set_goal(environment.goal)
 
 # Set up the simulation environment (uses the same non-linearized model with a smaller timestep
 simulation = CarTrailerSimWithAcc(dt=DT_SIMULATION)
-start_position = [5, -1.5, 0, 0, 0]
+start_position = [5, -1.5, 0, 0]
 simulation.reset(np.array(start_position))
 
 control_input = [0, 0]
 max_gamma = 0
 max_pred_gamma = 0
-car_states, trailer_states, inputs = [], [], []
+car_states, inputs = [], []
 for i in itertools.count():
     log = simulation.step(control_input)
     car_states.append(log['car'])
-    trailer_states.append(log['trailer'])
     inputs.append(log['inputs'])
 
     if i % STEPS_UPDATE == 0:
@@ -45,6 +44,6 @@ for i in itertools.count():
         break
         # simulation.reset(np.array(start_position))
 
-log_history = {'car': np.array(car_states), 'trailer': np.array(trailer_states), 'inputs': np.array(inputs)}
+log_history = {'car': np.array(car_states), 'inputs': np.array(inputs)}
 plot_history(log_history, dt=DT_SIMULATION, goal=controller.goal, lim=[(-10, 50), (-10, 10)], env=environment)
 plot_graphs(log_history, dt=DT_SIMULATION)

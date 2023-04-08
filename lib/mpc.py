@@ -60,7 +60,6 @@ class MPC:
                 x: x-position of the car
                 y: y-position of the car
                 psi: orientation of the car in the 2D plane
-                gamma: angle between the car and the trailer, defined as the difference in orientation. Straight combination has a gamma of zero.
                 v: velocity of the car
             inputs u: [a, delta_f]
                 a: acceleration of the car
@@ -70,23 +69,19 @@ class MPC:
         :param lin_input: The input around which to linearize
         :return: The A and B matrix (in x' = Ax + Bu) of the linearized model
         """
-        assert lin_state.shape == (5,), f"The state should have shape [5], but has {lin_state.shape}."
+        assert lin_state.shape == (4,), f"The state should have shape [4], but has {lin_state.shape}."
         assert lin_input.shape == (2,), f"The input should have shape [2], but has {lin_input.shape}."
 
-        x_e, y_e, psi_e, gamma_e, v_e = lin_state
+        x_e, y_e, psi_e, v_e = lin_state
         a_e, delta_f_e = lin_input
         l1, l2, l12 = CarTrailerDimension.l1, CarTrailerDimension.l2, CarTrailerDimension.l12
-        A_lin = np.array([[0, 0, -v_e * np.sin(psi_e), 0, np.cos(psi_e)],
-                          [0, 0, v_e * np.cos(psi_e), 0, np.sin(psi_e)],
-                          [0, 0, 0, 0, np.tan(delta_f_e) / l1],
-                          [0, 0, 0,
-                           -v_e * l12 / (l1 * l2) * np.sin(gamma_e) * np.tan(delta_f_e) - v_e / l2 * np.sin(gamma_e),
-                           (1 / l1 + l12 / (l1 * l1) * np.cos(gamma_e)) * np.tan(delta_f_e) - np.sin(gamma_e) / l2],
-                          [0, 0, 0, 0, 0]])
+        A_lin = np.array([[0, 0, -v_e * np.sin(psi_e), np.cos(psi_e)],
+                          [0, 0, v_e * np.cos(psi_e), np.sin(psi_e)],
+                          [0, 0, 0, np.tan(delta_f_e) / l1],
+                          [0, 0, 0, 0]])
         B_lin = np.array([[0, 0],
                           [0, 0],
                           [0, v_e / l1 * 1 / np.cos(delta_f_e) ** 2],
-                          [0, (v_e / l1 + v_e * l12 / (l1 * l2) * np.cos(gamma_e)) / np.cos(delta_f_e) ** 2],
                           [1, 0]])
 
         return A_lin, B_lin
@@ -116,7 +111,7 @@ class MPC:
         :param goal: the goal state. Should be an equilibrium state
         :return:
         """
-        assert np.array(goal).shape == (5,)
+        assert np.array(goal).shape == (4,)
         # check if the goal is an equilibrium state: x+ = x with u = 0
         assert np.all(goal == self.A @ goal), \
             "Goal is not an equilibrium point. At least not for the linearized model. E.g. psi != 0 is not an equilibrium point."
@@ -147,8 +142,8 @@ class MPCStateFB(MPC):
         """
         super().__init__(dt, N, lin_state, lin_input, env)
 
-        self.nx, self.nu = 5, 2
-        self.Q = np.diag([3, 3, 10, 0, 11])  # [1, 1, 10, 10, 3] # [3, 3, 1, 1, 1]
+        self.nx, self.nu = 4, 2
+        self.Q = np.diag([3, 3, 10, 11])  # [1, 1, 10, 10, 3] # [3, 3, 1, 1, 1]
         self.R = np.eye(self.nu) * 10
 
         self.terminal_constraint_bool = terminal_constraint
@@ -161,7 +156,7 @@ class MPCStateFB(MPC):
         except numpy.linalg.LinAlgError:
             # print("\nNOT POSSIBLE TO SOLVE DARE\n")
             assert False, ("\nNOT POSSIBLE TO SOLVE DARE\n")
-            self.P = np.zeros((5, 5))
+            self.P = np.zeros((4, 4))
         # Generate the prediction model and cost function matrices
         self.T, self.S = predmod(self.A, self.B, self.N)
         self.H, self.h, _ = costgen(self.Q, self.R, self.P, self.T, self.S, self.nx)
@@ -171,7 +166,6 @@ class MPCStateFB(MPC):
         self.input_lower = -self.input_upper
 
         # Define state constraints:
-        # self.gamma_lower, self.gamma_upper = - np.pi / 4, np.pi / 4
         # self.x_lower, self.x_upper = -30, 50
         # self.y_lower, self.y_upper = -3, 3
         # self.v_lower, self.v_upper = 0, 5
@@ -179,13 +173,10 @@ class MPCStateFB(MPC):
 
         # State constraints to stay close to the linearized state:
         # -pi/4 <= psi <= pi/4
-        self.state_const_A += [[0, 0, 1, 0, 0], [0, 0, -1, 0, 0]]
+        self.state_const_A += [[0, 0, 1, 0], [0, 0, -1, 0]]
         self.state_const_b += [np.pi / 8, np.pi / 8]
-        # -pi/4 <= gamma <= pi/4
-        self.state_const_A += [[0, 0, 0, 1, 0], [0, 0, 0, -1, 0]]
-        self.state_const_b += [np.pi/4, np.pi/4]
         # 0 <= v <= 5
-        self.state_const_A += [[0, 0, 0, 0, 1], [0, 0, 0, 0, -1]]
+        self.state_const_A += [[0, 0, 0, 1], [0, 0, 0, -1]]
         self.state_const_b += [5, 0]
 
 
@@ -207,16 +198,12 @@ class MPCStateFB(MPC):
         # A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.eye(self.nx)  # -state <= ...
 
         # ### ONLY CONSTRAINT ON X AND Y
-        # A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 0, 0, 0])  # state <= ...
-        # A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 0, 0, 0])  # -state <= ...
+        # A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 0, 0])  # state <= ...
+        # A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 0, 0])  # -state <= ...
 
         # ### ONLY CONSTRAINT ON X, Y AND PSI
-        A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 1, 0, 0])  # state <= ...
-        A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 1, 0, 0])  # -state <= ...
-
-        # ### ONLY CONSTRAINT ON X, Y, PSI AND V
-        # A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 1, 1, 0])  # state <= ...
-        # A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 1, 1, 0])  # -state <= ...
+        A[0:self.nx, self.N * self.nx:(self.N + 1) * self.nx] = np.diag([1, 1, 1, 0])  # state <= ...
+        A[self.nx: 2 * self.nx, self.N * self.nx:(self.N + 1) * self.nx] = -np.diag([1, 1, 1, 0])  # -state <= ...
 
         b = np.hstack((self.goal, -self.goal))
 
@@ -228,8 +215,6 @@ class MPCStateFB(MPC):
         Create the constraint for inputs in this function
         A u <= b
             u = the input sequence with a variable length depending on the horizon
-        :param x: the state sequence; the type is some cvxpy expression
-        :param u: the input sequence; the type is some cvxpy expression
         :return: cvxpy compatible constraint
         """
         assert self.nu == len(self.input_upper), \
@@ -247,8 +232,6 @@ class MPCStateFB(MPC):
         Create the constraint for state (except from the terminal constraint) in this function
         A x <= b
             x = the state sequence with a variable length depending on the horizon
-        :param x: the state sequence; the type is some cvxpy expression
-        :param u: the input sequence; the type is some cvxpy expression
         :return: cvxpy compatible constraint
         """
         A, b = [], []
