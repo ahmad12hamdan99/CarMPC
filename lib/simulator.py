@@ -106,12 +106,13 @@ class CarTrailerSim:
 
 
 class CarTrailerSimWithAcc:
-    def __init__(self, use_CT: bool = True, dt: float = 0.01) -> None:
+    def __init__(self, dt: float = 0.01, use_CT: bool = True,  clip: bool = False) -> None:
         """
         The class with the model in it, which can be updated for every timestep.
 
-        :param use_CT: Whether to use the continuous time dynamics or the discretized system
         :param dt: The timestep to use in the continuous time dynamics
+        :param use_CT: Whether to use the continuous time dynamics or the discretized system
+        :param clip: if true, clip the control input instead of throwing an error
         """
         self.time = 0
         self.l1 = CarTrailerDimension.l1
@@ -119,8 +120,9 @@ class CarTrailerSimWithAcc:
         self.l12 = CarTrailerDimension.l12
         # state = [x, y, psi, v]
         self.state = np.zeros(4)
-        self.use_CT = use_CT
         self.dt = dt if use_CT else None
+        self.use_CT = use_CT
+        self.clip = clip
         # Constraints --> Need to set some meaningful values
         self.x_lower, self.x_upper = -np.inf, np.inf  # m
         self.y_lower, self.y_upper = -np.inf, np.inf  # m
@@ -176,16 +178,21 @@ class CarTrailerSimWithAcc:
         log['inputs'] = np.array([a, delta_f])
         return log
 
-    def check_input(self, control_input: Union[np.ndarray, list]) -> None:
+    def check_input(self, control_input: Union[np.ndarray, list[float]]) -> Union[np.ndarray, list]:
         """
         Throws an assert if the input is outside the input constraints
         :param control_input: A 1D array with to elements: [acceleration, steering angle]
         """
         a, delta_f = control_input
-        assert np.all([a, -a] <= [self.acc_upper, -self.acc_lower]), \
-            f"Acceleration should be between [{self.acc_lower, self.acc_upper}], but is {a}."
-        assert np.all([delta_f, -delta_f] <= [self.delta_upper, -self.delta_lower]), \
-            f"Steering angle should be between [{self.delta_lower:.3f}, {self.delta_upper:.3f}], but is {delta_f}."
+        if self.clip:
+            control_input = np.clip(control_input, [self.acc_lower, self.delta_lower], [self.acc_upper, self.delta_upper])
+        else:
+            assert np.all([a, -a] <= [self.acc_upper, -self.acc_lower]), \
+                f"Acceleration should be between [{self.acc_lower, self.acc_upper}], but is {a}."
+            assert np.all([delta_f, -delta_f] <= [self.delta_upper, -self.delta_lower]), \
+                f"Steering angle should be between [{self.delta_lower:.3f}, {self.delta_upper:.3f}], but is {delta_f}."
+
+        return control_input
 
     def step(self, control_input: Union[np.ndarray, list]) -> dict[str, np.ndarray]:
         """

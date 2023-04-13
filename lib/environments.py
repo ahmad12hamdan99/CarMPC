@@ -10,11 +10,25 @@ class BaseEnv:
     def __init__(self):
         self.constraints_A = []
         self.constraints_b = []
+        self.goal = None
+        self.lim = None
+        self.name = 'BaseEnv'
 
+        # Check the length of the constraints lists
         self.check_constraints()
 
         # For the legend of the plot
         self.handles = []
+
+    def set_goal(self, goal: Union[list[float], np.ndarray, tuple[float]]):
+        self.goal = goal
+
+    def set_lim(self, lim: Union[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int]]]):
+        """
+        Set the ranges of the plot
+        :param lim: the axes ranges of the plot [(x_min, x_max), (y_min, y_max)]
+        """
+        self.lim = lim
 
     def check_constraints(self):
         """
@@ -24,12 +38,11 @@ class BaseEnv:
             f"The constraints array (len(A) = {len(self.constraints_A)} and len(B) = {len(self.constraints_b)})" + \
             "do not have the same length. This will produced unpredictable behaviour."
 
-    def plot(self, lim: Union[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int], tuple[int, int]]]) -> None:
+    def plot(self) -> None:
         """
         This function should add all the visualisation to the environment
-        :param lim: the axes ranges of the plot [(x_min, x_max), (y_min, y_max)]
         """
-        self.x_lim, self.y_lim = lim
+        self.x_lim, self.y_lim = self.lim
 
 
 class RoadEnv(BaseEnv):
@@ -39,6 +52,8 @@ class RoadEnv(BaseEnv):
         self.constraints_A += [[0, 1, 0, 0], [0, -1, 0, 0]]
         self.constraints_b += [3, 3]
         self.y_lower, self.y_upper = -3, 3  # for plotting
+        self.lim = [(-10, 50), (-10, 10)]
+        self.name = 'RoadEnv'
 
         self.check_constraints()
         self.goal = [30, 1.5, 0, 0]
@@ -47,12 +62,11 @@ class RoadEnv(BaseEnv):
         grey_patch = patches.Patch(color=(0.6, 0.6, 0.6), label='Road boundaries')
         self.handles += [grey_patch]
 
-    def plot(self, lim: Union[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int], tuple[int, int]]]) -> None:
+    def plot(self) -> None:
         """
         Calls the parents plot function and adds a visualisation for the road
-        :param lim: the axes ranges of the plot [(x_min, x_max), (y_min, y_max)]
         """
-        super().plot(lim)
+        super().plot()
         ax = plt.gca()
         # Road boundaries
         plt.fill_between([*self.x_lim], self.y_upper, self.y_lim[1], color=(0.6, 0.6, 0.6))
@@ -67,6 +81,7 @@ class RoadOneCarEnv(RoadEnv):
         # A @ x <= b
         self.constraints_A += [[1, 0, 0, 0]]
         self.constraints_b += [30]
+        self.name = 'RoadOneCarEnv'
 
         self.check_constraints()
         self.goal = [30, -1.5, 0, 0]
@@ -75,12 +90,11 @@ class RoadOneCarEnv(RoadEnv):
         yellow_patch = patches.Patch(color=(0.91, 0.8, 0.18), label='Obstacles')
         self.handles += [yellow_patch]
 
-    def plot(self, lim: Union[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int], tuple[int, int]]]) -> None:
+    def plot(self) -> None:
         """
         Calls the parents plot function and adds a visualisation for the other cars and belonging constraints
-        :param lim: the axes ranges of the plot [(x_min, x_max), (y_min, y_max)]
         """
-        super().plot(lim)
+        super().plot()
         ax = plt.gca()
         # Car 1
         x_upper = 30
@@ -104,6 +118,7 @@ class RoadMultipleCarsEnv(RoadEnv):
         # A @ x <= b
         self.constraints_A += [[-0.25, 1, 0, 0], [0.25, -1, 0, 0]]
         self.constraints_b += [-2, 6.25]
+        self.name = 'RoadMultipleCarsEnv'
 
         self.check_constraints()
         self.goal = [30, 1.5, 0, 0]
@@ -113,12 +128,11 @@ class RoadMultipleCarsEnv(RoadEnv):
         purple_patch = patches.Patch(color=(0.78, 0.18, 0.91), label='Obstacles')
         self.handles += [yellow_patch, purple_patch]
 
-    def plot(self, lim: Union[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int], tuple[int, int]]]) -> None:
+    def plot(self) -> None:
         """
         Calls the parents plot function and adds a visualisation for the other cars and belonging constraints
-        :param lim: the axes ranges of the plot [(x_min, x_max), (y_min, y_max)]
         """
-        super().plot(lim)
+        super().plot()
         ax = plt.gca()
         # Car 1
         car_constraint_A = self.constraints_A[-2]

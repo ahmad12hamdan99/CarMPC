@@ -11,7 +11,6 @@ from lib.environments import BaseEnv
 def plot_history(log_data: dict[str, np.ndarray],
                  dt: float = 0.01,
                  goal: np.ndarray = None,
-                 lim: Union[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int], tuple[int, int]]] = None,
                  env: BaseEnv = None
                  ) -> None:
     """
@@ -20,18 +19,17 @@ def plot_history(log_data: dict[str, np.ndarray],
     :param log_data: The log data in a dictionary
     :param dt: The timestep used to run the model
     :param goal: The goal state.
-    :param lim: the axes ranges of the plot [(x_min, x_max), (y_min, y_max)]
     :param env: The environment that defines the road boundaries and obstacles
     :return: No return
     """
-    lim = [(-40, 40), (-40, 40)] if lim is None else lim
+    lim = [(-40, 40), (-40, 40)] if env.lim is None else env.lim
     x_lim, y_lim = lim
     time_range = np.arange(len(log_data['car'])) * dt
 
     plt.figure()
     ax = plt.gca()
     if env is not None:
-        env.plot(lim)
+        env.plot()
 
     interval = len(time_range) - 1
     x_car, y_car, psi_car = log_data['car'][::interval, 0], log_data['car'][::interval, 1], log_data['car'][::interval, 2]
@@ -68,7 +66,6 @@ def plot_live(log_data: dict[str, np.ndarray],
               time=None,
               goal: np.ndarray = None,
               state_horizon: np.ndarray = None,
-              lim: Union[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int], tuple[int, int]]] = None,
               env: BaseEnv = None,
               ) -> None:
     """
@@ -79,18 +76,17 @@ def plot_live(log_data: dict[str, np.ndarray],
     :param time: The current simulation time
     :param goal: The goal state.
     :param state_horizon: The planned horizon for state
-    :param lim: the axes ranges of the plot [(x_min, x_max), (y_min, y_max)]
     :param env: The environment that defines the road boundaries and obstacles
 
     :return: No return
     """
-    lim = [(-40, 40), (-40, 40)] if lim is None else lim
+    lim = [(-40, 40), (-40, 40)] if env.lim is None else env.lim
     x_lim, y_lim = lim
 
     plt.cla()
     ax = plt.gca()
     if env is not None:
-        env.plot(lim)
+        env.plot()
 
     x_car, y_car, psi_car = log_data['car'][0], log_data['car'][1], log_data['car'][2]
     t_car = transforms.Affine2D().rotate_around(x_car, y_car, psi_car)

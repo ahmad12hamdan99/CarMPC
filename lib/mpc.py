@@ -143,8 +143,8 @@ class MPCStateFB(MPC):
         super().__init__(dt, N, lin_state, lin_input, env)
 
         self.nx, self.nu = 4, 2
-        self.Q = np.diag([3, 3, 10, 11])  # [1, 1, 10, 10, 3] # [3, 3, 1, 1, 1]
-        self.R = np.eye(self.nu) * 10
+        self.Q = np.diag([5, 5, 10, 10]) * 10  # [1, 1, 10, 10, 3] # [3, 3, 1, 1, 1]
+        self.R = np.diag([10, 100]) * 10  # Otherwise prefer steering away over braking
 
         self.terminal_constraint_bool = terminal_constraint
         self.input_constraint_bool = input_constraint
@@ -160,6 +160,9 @@ class MPCStateFB(MPC):
         # Generate the prediction model and cost function matrices
         self.T, self.S = predmod(self.A, self.B, self.N)
         self.H, self.h, _ = costgen(self.Q, self.R, self.P, self.T, self.S, self.nx)
+
+        # Optimal unconstrained control law: u = K @ x0
+        self.K = -np.linalg.inv(self.R + self.B.T @ self.P @ self.B) @ self.B.T @ self.P @ self.A
 
         # Define input constraints: [acceleration, steering angle]
         self.input_upper = np.array([2, np.pi / 8])
@@ -339,42 +342,40 @@ class MPCStateFB(MPC):
 
         return A, b
 
-    def step(self, x0) -> np.ndarray:
+    def step(self, x0, LQR: bool = False) -> np.ndarray:
         """
         Function to step the mpc controller
         :param x0: the current state
         :return: returns the first action of the optimal control sequence
         """
+        if LQR:
+            return self.K @ x0
+        else:
+            u = cp.Variable((self.N * self.nu))
+            x = self.T @ x0 + self.S @ u
+            x0 = x0 - self.goal
+            objective = cp.Minimize(1 / 2 * cp.quad_form(u, self.H) + self.h @ x0 @ u)
 
-        u = cp.Variable((self.N * self.nu))
-        x = self.T @ x0 + self.S @ u
-        x0 = x0 - self.goal
-        objective = cp.Minimize(1 / 2 * cp.quad_form(u, self.H) + self.h @ x0 @ u)
+            constraints = []
+            if self.terminal_constraint_bool:
+                A, b = self.terminal_constraint()
+                constraints += [A @ x <= b]
+            if self.input_constraint_bool:
+                A, b = self.input_constraint()
+                constraints += [A @ u <= b]
+            if self.state_constraint_bool:
+                A, b = self.state_constraint()
+                constraints += [A @ x <= b]
 
-        constraints = []
-        if self.terminal_constraint_bool:
-            A, b = self.terminal_constraint()
-            constraints += [A @ x <= b]
-        if self.input_constraint_bool:
-            A, b = self.input_constraint()
-            constraints += [A @ u <= b]
-        if self.state_constraint_bool:
-            A, b = self.state_constraint()
-            constraints += [A @ x <= b]
+            problem = cp.Problem(objective, constraints)
+            result = problem.solve()
+            if math.isinf(result):
+                # return [0, 0]
+                assert False, "No feasible solution"
 
-        problem = cp.Problem(objective, constraints)
-        result = problem.solve()
-        if math.isinf(result):
-            # return [0, 0]
-            assert False, "No feasible solution"
+            # Save for visualisation purposes
+            self.x_horizon = self.T @ x0 + self.S @ u.value
+            self.x_horizon = self.x_horizon.reshape(-1, self.nx) + self.goal
+            self.u_horizon = u.value.reshape(-1, 2)
 
-        # Save for visualisation purposes
-        self.x_horizon = self.T @ x0 + self.S @ u.value
-        self.x_horizon = self.x_horizon.reshape(-1, self.nx) + self.goal
-        self.u_horizon = u.value.reshape(-1, 2)
-
-        # if True:
-        #     K = np.linalg.inv(self.R + self.B.T @ self.P @ self.B) @ self.B.T @ self.P @ self.A
-        #     return K @ x0
-
-        return u.value[:self.nu]
+            return u.value[:self.nu]
