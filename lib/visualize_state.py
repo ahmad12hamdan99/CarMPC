@@ -54,7 +54,7 @@ def plot_history(log_data: dict[str, np.ndarray],
     handles, _ = ax.get_legend_handles_labels()
     ax.legend(loc='upper center', handles=handles + env.handles,
               bbox_to_anchor=(0.5, -0.15),
-              fancybox=True, shadow=True, ncol=5)
+              fancybox=True, shadow=True, ncol=4)
     plt.xlim(*x_lim)
     plt.ylim(*y_lim)
     ax.set_aspect('equal', 'box')
@@ -111,65 +111,16 @@ def plot_live(log_data: dict[str, np.ndarray],
     handles, _ = ax.get_legend_handles_labels()
     ax.legend(loc='upper center', handles=handles + env.handles,
               bbox_to_anchor=(0.5, -0.15),
-              fancybox=True, shadow=True, ncol=5)
+              fancybox=True, shadow=True, ncol=4)
     plt.xlim(*x_lim)
     plt.ylim(*y_lim)
     ax.set_aspect('equal', 'box')
     plt.pause(dt)
 
 
-# def plot_environment(ax,
-#                      x_lim: Union[tuple[int, int], list[int, int]],
-#                      y_lim: Union[tuple[int, int], list[int, int]],
-#                      ) -> None:
-#     """
-#     Plot the obstacles, the constraints and the road with its boundaries
-#     :param ax: matplotlib axis object (return of plt.gca())
-#     :param x_lim: The x range of the plot
-#     :param y_lim: The y range of the plot
-#     """
-#     # Car 1
-#     car_constraint_A = [-0.15, 1, 0, 0, 0]
-#     car_constraint_b = -1.5
-#     x = np.linspace(*x_lim, 2)
-#     y = (-car_constraint_A[0] * x + car_constraint_b) / car_constraint_A[1]
-#     plt.plot(x, y, color=(0.91, 0.8, 0.18), linestyle='--')
-#     plt.fill_between(x, y, y_lim[1], color=(0.91, 0.8, 0.18, 0.1))
-#     for i in range(3):
-#         ax.add_patch(patches.Rectangle((0 - i * 1.25 * CarTrailerDimension.car_length,
-#                                         1.25 - CarTrailerDimension.car_width / 2),
-#                                        CarTrailerDimension.car_length,
-#                                        CarTrailerDimension.car_width,
-#                                        edgecolor='none',
-#                                        facecolor=(0.91, 0.8, 0.18),
-#                                        ))
-#
-#     # Car 2
-#     car_constraint_A = [-0.15, 1, 0, 0, 0]
-#     car_constraint_b = -3.75
-#     x = np.linspace(*x_lim, 2)
-#     y = (-car_constraint_A[0] * x + car_constraint_b) / car_constraint_A[1]
-#     plt.plot(x, y, color=(0.78, 0.18, 0.91), linestyle='--')
-#     plt.fill_between(x, y, y_lim[0], color=(0.78, 0.18, 0.91, 0.1))
-#     for i in range(4):
-#         ax.add_patch(patches.Rectangle((30 + i * 1.25 * CarTrailerDimension.car_length,
-#                                         -1.25 - CarTrailerDimension.car_width / 2),
-#                                        CarTrailerDimension.car_length,
-#                                        CarTrailerDimension.car_width,
-#                                        edgecolor='none',
-#                                        facecolor=(0.78, 0.18, 0.91),
-#                                        ))
-#
-#     # Road boundaries
-#     y_lower, y_upper = -3, 3
-#     plt.fill_between([*x_lim], y_upper, y_lim[1], color=(0.6, 0.6, 0.6))
-#     plt.fill_between([*x_lim], y_lower, y_lim[0], color=(0.6, 0.6, 0.6))
-#     plt.plot(list(x_lim), [0, 0], color=(0, 0, 0), linestyle=(0, (5, 10)))
-
-
 def plot_graphs(log_data: dict[str, np.ndarray], dt: float = 0.01) -> None:
     """
-    Plots graphs of the different states and inputs against the time
+    Plots graphs of the different states and inputs and the cost against the time
 
     :param log_data: The log data in a dictionary
     :param dt: The timestep used to run the model
@@ -177,15 +128,27 @@ def plot_graphs(log_data: dict[str, np.ndarray], dt: float = 0.01) -> None:
     """
     plt.figure()
     time_range = np.arange(len(log_data['car'])) * dt
-    fig, axs = plt.subplots(4, 1, figsize=(5, 12), constrained_layout=True)
+    fig, axs = plt.subplots(6, 1, figsize=(5, 12), constrained_layout=True)
     fig.suptitle("Car states")
     titles = ['x', 'y', '\psi', 'v']
     units = ['m', 'm', 'rad', 'm/s']
-    for i in range(len(axs)):
+    for i in range(4):
         ax = axs[i]
-        ax.plot(time_range, log_data['car'][..., i])
+        ax.step(time_range, log_data['car'][..., i])
         ax.set_title(f'${titles[i]}$')
         ax.set_xlabel("Time [s]")
         ax.set_ylabel(f'${titles[i]}$' + ' [' + units[i] + ']')
+
+    ax = axs[4]
+    ax.plot(time_range, log_data['costs'], label='cost')
+    ax.set_title(f'The value of the objective function')
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel(f'cost [-]')
+
+    ax = axs[5]
+    ax.plot(time_range, np.cumsum(log_data['costs']), label='accumulated cost')
+    ax.set_title(f'The accumelated value of the objective function')
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel(f'cost [-]')
 
     plt.show()

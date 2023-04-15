@@ -1,1 +1,7 @@
 __pycache__
+.idea/
+examples/.ipynb_checkpoints
+*.ipynb
+*.asv
+*.m
+*.npy

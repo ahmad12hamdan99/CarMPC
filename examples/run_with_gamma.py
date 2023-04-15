@@ -2,7 +2,7 @@ import numpy as np
 import itertools
 
 from lib.mpc import MPCStateFB
-from lib.simulator import CarTrailerSimWithAcc, CarTrailerDimension
+from lib.simulator import CarSimulator, CarTrailerDimension
 from lib.visualize_state import plot_live
 
 # Simulation runs at a higher rate than the MPC controller
@@ -16,7 +16,7 @@ controller = MPCStateFB(dt=DT_CONTROL, N=20, lin_state=[0, 0, 0, 0, -2], lin_inp
 controller.set_goal([-20, -1, 0, 0, 0])
 
 # Set up the simulation environment (uses the same non-linearized model with a smaller timestep
-simulation = CarTrailerSimWithAcc(dt=DT_SIMULATION)
+simulation = CarSimulator(dt=DT_SIMULATION)
 # start_position = [0, 5, 0.3, 0.05, 0]
 start_position = [20, 0, 0, 0, 0]
 simulation.reset(np.array(start_position))

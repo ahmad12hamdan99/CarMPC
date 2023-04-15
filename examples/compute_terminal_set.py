@@ -2,14 +2,13 @@ import numpy as np
 import itertools
 import cvxpy as cp
 import matplotlib.pyplot as plt
+import matplotlib.colors as clr
+import matplotlib.patches as patches
 import polytope as pc
 
 from lib.mpc import MPCStateFB
 from lib.environments import *
-
-DT_CONTROL = 0.1  # s
-LINEARIZE_STATE = [0, 0, 0, 3]
-LINEARIZE_INPUT = [0, 0]
+from lib.configuration import *
 
 
 # We are looking for the input invariant set (maximal constraint admissible set)
@@ -92,33 +91,41 @@ def visualise_set(halfspaces: np.ndarray,
     :return:
     """
     center = [0, 0, 0, 0] if env is None else env.goal
-    A_xy, b = halfspaces[..., dims], halfspaces[..., 4]
-
-    ind = np.abs(A_xy.mean(axis=1)) > 0
-    A_xy, b = A_xy[ind], b[ind]
+    A, b = halfspaces[..., :4], halfspaces[..., 4]
 
     steps = 100
     off_x, off_y = center[dims[0]], center[dims[1]]
     xx, yy = np.meshgrid(np.linspace(-extent + off_x, extent + off_x, steps),
                          np.linspace(-extent + off_y, extent + off_y, steps))
+    plt.figure()
+    ax = plt.gca()
 
+    colors = iter(clr.TABLEAU_COLORS)
+    psi = 0
+    v = 0
+    # for v in [0, 1, 2, 3, 4, 5]:
     points = []
     for i in range(xx.shape[0]):
         for j in range(xx.shape[1]):
-            point = [xx[i, j], yy[i, j]]
-            if np.all(A_xy @ point <= b).astype(bool):
+            point = [xx[i, j], yy[i, j], psi, v]
+            if np.all(A @ point <= b).astype(bool):
                 points.append(point)
 
     points = np.array(points)
-    plt.figure()
+    hull = pc.qhull(points[..., :2])
+    hull.plot(ax=ax, color=next(colors), linestyle='solid', edgecolor='none')
+
     env.plot()
-    plt.scatter(points[..., 0], points[..., 1], s=1, label='Inside set')
-    plt.title(f"All region within the set for dimension: {dims}")
+    # plt.scatter(points[..., 0], points[..., 1], s=1, label='Inside set')
+    plt.title(f"The terminal set projected on the x,y-plane")
     plt.xlim(*env.lim[0])
     plt.ylim(*env.lim[1])
-    plt.scatter(center[dims[0]], center[dims[1]], label='goal')
-    plt.legend()
-    ax = plt.gca()
+    plt.scatter(env.goal[0], env.goal[1], marker="*", c='lime', label='goal')
+    handles, _ = ax.get_legend_handles_labels()
+    term_set = patches.Patch(color=clr.TABLEAU_COLORS['tab:blue'], label='Terminal set')
+    ax.legend(loc='upper center', handles=handles + env.handles + [term_set],
+              bbox_to_anchor=(0.5, -0.15),
+              fancybox=True, shadow=True, ncol=3)
     ax.set_aspect('equal', 'box')
     plt.show()
 
@@ -150,7 +157,7 @@ if __name__ == "__main__":
     A_con, b_con = controller.state_constraint()
     A_con = A_con[..., 4:]  # only use the constraints for x(1) (given that N=1)
     # Compute the controllability matrix
-    controllability_matrix = np.hstack([np.linalg.matrix_power(A, i) @ B for i in range(5)])
+    controllability_matrix = np.hstack([np.linalg.matrix_power(A, i) @ B for i in range(4)])
 
     print("\n\n============ Constraints ============\n")
     print(f"A {A_con.shape}:\n{A_con}\n")
@@ -171,34 +178,33 @@ if __name__ == "__main__":
     x_A = [ele.real for ele in eigenvalues_A]  # extract real part
     y_A = [ele.imag for ele in eigenvalues_A]  # extract imaginary part
 
-    # ======= UNCOMMENT LATER ========
-    # plt.figure()
-    # ax = plt.gca()
-    # circle = plt.Circle((0, 0), 1, color=(0, 0, 0), fill=False, label='unit disk')
-    # ax.add_patch(circle)
-    # plt.scatter(x_A_k, y_A_k, label='eigenvalues A_k')
-    # plt.scatter(x_A, y_A, label='eigenvalues A')
-    # plt.title("Eigenvalues of original system and system with the LQR control law")
-    # plt.grid()
-    # ax.set_aspect('equal', 'box')
-    # plt.legend()
-    # plt.show()
+    plt.figure()
+    ax = plt.gca()
+    circle = plt.Circle((0, 0), 1, color=(0, 0, 0), fill=False, label='unit disk')
+    ax.add_patch(circle)
+    plt.scatter(x_A_k, y_A_k, label='eigenvalues A_k')
+    plt.scatter(x_A, y_A, label='eigenvalues A')
+    plt.title("Eigenvalues of original system and system with the LQR control law")
+    plt.grid()
+    ax.set_aspect('equal', 'box')
+    plt.legend()
+    plt.show()
 
     # Calculate the terminal set with the state constraints; does not respect the input constraints
-    # Return as Ax - b <= 0; saved as halfspaces: [A, b]
-    p, _ = compute_terminal_set(A_k, A_con, b_con, env=environment)
-    p_red = pc.reduce(p)
-    # A_term_set_red, b_term_set_red = p_red.A, p_red.b
+    # Return as Ax - b <= 0; saved as a polytope object
+    p, _ = compute_terminal_set(A_k, A_con, b_con, env=environment)  # x+ \in X_f given x \in X_f for u \in R^2
 
-    # We now the terminal set, which satisfy the state constraints, but not yet the input constraints.
+    # We now have the terminal set, which satisfy the state constraints, but not yet the input constraints.
     # LQR optimal control gain: u = Kx
     # Constraints on u (input): A_input_cnstr@u <= b_input_cnstr  -->  A_input_cnstr@K@x <= b_input_cnstr
     # So additional constraints on x --> (A_input_cnstr@K)@x <= b_input_cnstr
     A_input, b_input = controller.input_constraint()
-    p_input = pc.Polytope(A_input @ K, b_input)
+    p_input = pc.Polytope(A_input @ K, b_input)  # All u \in U given U = Kx
     p_input = p_input.translation(environment.goal)
 
-    p_terminal_set = p_red.intersect(p_input)
+    # Take the intersection of both terminal set that satisfy the state constraints
+    # and the states that satisfy the input constraints
+    p_terminal_set = pc.reduce(p.intersect(p_input))  # x+ \in X_f given x \in X_f for u \in U
 
     A_term_set_final, b_term_set_final = p_terminal_set.A, p_terminal_set.b
     halfspaces = np.hstack((A_term_set_final, np.expand_dims(b_term_set_final, axis=1)))
@@ -210,7 +216,6 @@ if __name__ == "__main__":
     print(f"Terminal set has {len(halfspaces)} constraints.")
 
     # Visualize the terminal set
-    visualise_set(halfspaces, extent=2, env=environment)
+    visualise_set(halfspaces, extent=25, env=environment)
 
-    print(f"Terminal set:\n{p_red}")
-
+    # print(f"Terminal set:\n{p_terminal_set}")

@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.lines as mlines
 import numpy as np
 from typing import Union
 
@@ -18,7 +19,8 @@ class BaseEnv:
         self.check_constraints()
 
         # For the legend of the plot
-        self.handles = []
+        goal_star = mlines.Line2D([], [], color='lime', marker='*', linestyle='None', markersize=10, label='goal')
+        self.handles = [goal_star]
 
     def set_goal(self, goal: Union[list[float], np.ndarray, tuple[float]]):
         self.goal = goal
@@ -43,6 +45,8 @@ class BaseEnv:
         This function should add all the visualisation to the environment
         """
         self.x_lim, self.y_lim = self.lim
+        plt.scatter(self.goal[0], self.goal[1], marker="*", c='lime')
+
 
 
 class RoadEnv(BaseEnv):

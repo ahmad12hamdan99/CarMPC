@@ -36,10 +36,10 @@ def costgen(Q: np.ndarray, R: np.ndarray, P: np.ndarray, T: np.ndarray, S: np.nd
     np.ndarray, np.ndarray, np.ndarray]:
     """
     Function to calculate the matrices H and h and the constant term in the following cost equation with terminal cost:
-    V_N = 1/2 [ Sum{k=0}{N-1} x(k)^T Q x(k) + u(k)^T R u(k) ]  + x(N)^T P x(N)  [1]
+    V_N = [ Sum{k=0}{N-1} x(k)^T Q x(k) + u(k)^T R u(k) ]  + x(N)^T P x(N)  [1]
 
     To the following matrix equation:
-    V_N = 1/2 u_^T H u_ + h.T x0 u_ + 1/2 x0^T constant x0     [2]
+    V_N =  u_^T H u_ + 2 * h.T x0 u_ + x0^T constant x0     [2]
 
     Where:
     H = S^T Q S + R
