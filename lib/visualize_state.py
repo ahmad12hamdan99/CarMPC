@@ -48,7 +48,7 @@ def plot_history(log_data: dict[str, np.ndarray],
     if goal is not None:
         plt.scatter(goal[0], goal[1], marker="*", c='lime')
 
-    plt.title(f"The position of the car and trailer")
+    plt.title(f"The position of the car")
     plt.scatter(x_car, y_car, label='car', c='b')
     plt.plot(log_data['car'][..., 0], log_data['car'][..., 1], label='true traject', c='b', linestyle='--')
     if 'estimate' in log_data.keys():
@@ -116,8 +116,8 @@ def plot_live(log_data: dict[str, np.ndarray],
     if state_horizon is not None:
         plt.scatter(state_horizon[:, 0], state_horizon[:, 1], marker="x", c='black', label='pred. horz.')
 
-    plt.title(f"The position of the car and trailer" if time is None
-              else f"The position of the car and trailer (t = {time: .1f} s)")
+    plt.title(f"The position of the car" if time is None
+              else f"The position of the car(t = {time: .1f} s)")
     plt.scatter(x_car, y_car, label='car', c='b')
     handles, _ = ax.get_legend_handles_labels()
 

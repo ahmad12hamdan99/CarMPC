@@ -16,14 +16,18 @@ The repository contains several environments to run a simulation in with a contr
 ### State Feedback MPC
 `examples/run_MPCStateFB.py` contains an example which runs the state feedback based MPC.
 
-![State Feedback MPC simulation .gif](media/MPCStateFB.gif)
+[//]: # (![State Feedback MPC simulation .gif]&#40;media/MPCStateFB.gif&#41;)
+<img src="media/MPCStateFB.gif" width="500"/>
 
 ### Output Feedback MPC
 `examples/run_MPCOutputFB.py` contains an example which runs the output feedback based MPC.
 
-![Output Feedback MPC simulation .gif](media/MPCOutputFB.gif)
+[//]: # (![Output Feedback MPC simulation .gif]&#40;media/MPCOutputFB.gif&#41;)
+
+<img src="media/MPCOutputFB.gif" width="500"/>
 
 ### LQR controller
+
 `examples/run_LQR.py` contains an example which runs the LQR controller.
 
 ### Terminal set
