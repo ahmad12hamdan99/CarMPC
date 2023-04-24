@@ -1,9 +1,7 @@
-import numpy as np
-
 from lib.environments import *
 from lib.terminal_set import calc_terminal_set, visualise_set
 
-environment = RoadOneCarEnv()
+environment = RoadMultipleCarsEnv()
 # environment.set_goal([30, 0, 0, 0])
 
 # Calculate the terminal set
