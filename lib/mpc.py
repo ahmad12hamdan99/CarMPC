@@ -66,15 +66,12 @@ class MPC:
 
         # Solve the discrete algebraic Riccati equation
 
-        if use_LQR:
-            try:
-                self.P = dare(self.A, self.B, self.Q, self.R)
-            except numpy.linalg.LinAlgError:
-                print("\nNOT POSSIBLE TO SOLVE DARE\n")
-                self.P = np.zeros((4, 4))
-                # assert False, ("\nNOT POSSIBLE TO SOLVE DARE\n")
-        else:
+        try:
+            self.P = dare(self.A, self.B, self.Q, self.R)
+        except numpy.linalg.LinAlgError:
+            print("\nNOT POSSIBLE TO SOLVE DARE\n")
             self.P = np.zeros((4, 4))
+            # assert False, ("\nNOT POSSIBLE TO SOLVE DARE\n")
 
         # Generate the prediction model and cost function matrices
         self.T, self.S = predmod(self.A, self.B, self.N)
@@ -344,7 +341,6 @@ class MPCStateFB(MPC):
         self.x_horizon = self.T @ x0 + self.S @ u.value
         self.x_horizon = self.x_horizon.reshape(-1, self.nx) + self.goal
         self.u_horizon = u.value.reshape(-1, 2)
-        self.cost = cost
         x_N = x.value[-4:]
         self.terminal_cost = x_N @ self.P @ x_N
         u0 = u.value[:self.nu]

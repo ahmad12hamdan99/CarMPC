@@ -50,7 +50,9 @@ def plot_history(log_data: dict[str, np.ndarray],
 
     plt.title(f"The position of the car and trailer")
     plt.scatter(x_car, y_car, label='car', c='b')
-    plt.plot(log_data['car'][..., 0], log_data['car'][..., 1], label='car traject', c='b', linestyle='--')
+    plt.plot(log_data['car'][..., 0], log_data['car'][..., 1], label='true traject', c='b', linestyle='--')
+    if 'estimate' in log_data.keys():
+        plt.plot(log_data['estimate'][..., 0], log_data['estimate'][..., 1], label='est. traject', c=(1, 0, 0, 0.5), linestyle='--')
     handles, _ = ax.get_legend_handles_labels()
     ax.legend(loc='upper center', handles=handles + env.handles,
               bbox_to_anchor=(0.5, -0.15),
@@ -64,7 +66,7 @@ def plot_history(log_data: dict[str, np.ndarray],
 def plot_live(log_data: dict[str, np.ndarray],
               dt: float = 0.01,
               time=None,
-              goal: np.ndarray = None,
+              estimate: np.ndarray = None,
               state_horizon: np.ndarray = None,
               env: BaseEnv = None,
               ) -> None:
@@ -74,7 +76,7 @@ def plot_live(log_data: dict[str, np.ndarray],
     :param log_data: The log data in a dictionary
     :param dt: The timestep used to run the model
     :param time: The current simulation time
-    :param goal: The goal state.
+    :param estimate: the estimate state by the MPC controller.
     :param state_horizon: The planned horizon for state
     :param env: The environment that defines the road boundaries and obstacles
 
@@ -99,16 +101,26 @@ def plot_live(log_data: dict[str, np.ndarray],
                           ))
     c_car.set_transform(t_car + ax.transData)
 
-    if goal is not None:
-        plt.scatter(goal[0], goal[1], marker="*", c='lime')
+    if estimate is not None:
+        t_car = transforms.Affine2D().rotate_around(*estimate[:3])
+        c_car = ax.add_patch(
+            patches.Rectangle((x_car - CarTrailerDimension.l12, y_car - CarTrailerDimension.car_width / 2),
+                              CarTrailerDimension.car_length,
+                              CarTrailerDimension.car_width,
+                              edgecolor=(1, 0, 0, 0.5),
+                              facecolor='none',
+                              ))
+        c_car.set_transform(t_car + ax.transData)
+        plt.scatter(x_car, y_car, label='state est.', c=[(1, 0, 0, 0.5)])
 
     if state_horizon is not None:
-        plt.scatter(state_horizon[:, 0], state_horizon[:, 1], marker="x", c='black')
+        plt.scatter(state_horizon[:, 0], state_horizon[:, 1], marker="x", c='black', label='pred. horz.')
 
     plt.title(f"The position of the car and trailer" if time is None
               else f"The position of the car and trailer (t = {time: .1f} s)")
     plt.scatter(x_car, y_car, label='car', c='b')
     handles, _ = ax.get_legend_handles_labels()
+
     ax.legend(loc='upper center', handles=handles + env.handles,
               bbox_to_anchor=(0.5, -0.15),
               fancybox=True, shadow=True, ncol=4)
@@ -126,29 +138,19 @@ def plot_graphs(log_data: dict[str, np.ndarray], dt: float = 0.01) -> None:
     :param dt: The timestep used to run the model
     :return: No return
     """
-    plt.figure()
     time_range = np.arange(len(log_data['car'])) * dt
-    fig, axs = plt.subplots(6, 1, figsize=(5, 12), constrained_layout=True)
+    fig, axs = plt.subplots(4, 1, figsize=(5, 12), constrained_layout=True)
     fig.suptitle("Car states")
     titles = ['x', 'y', '\psi', 'v']
     units = ['m', 'm', 'rad', 'm/s']
     for i in range(4):
         ax = axs[i]
-        ax.step(time_range, log_data['car'][..., i])
+        ax.step(time_range, log_data['car'][..., i], label='true state')
+        if 'estimate' in log_data.keys():
+            ax.step(time_range, log_data['estimate'][..., i], label='state estimate')
         ax.set_title(f'${titles[i]}$')
         ax.set_xlabel("Time [s]")
         ax.set_ylabel(f'${titles[i]}$' + ' [' + units[i] + ']')
-
-    ax = axs[4]
-    ax.plot(time_range, log_data['costs'], label='cost')
-    ax.set_title(f'The value of the objective function')
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel(f'cost [-]')
-
-    ax = axs[5]
-    ax.plot(time_range, np.cumsum(log_data['costs']), label='accumulated cost')
-    ax.set_title(f'The accumelated value of the objective function')
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel(f'cost [-]')
+        ax.legend()
 
     plt.show()

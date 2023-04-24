@@ -88,7 +88,7 @@ class RoadOneCarEnv(RoadEnv):
         self.name = 'RoadOneCarEnv'
 
         self.check_constraints()
-        self.goal = [30, -1.5, 0, 0]
+        self.goal = [29.9, -1.5, 0, 0]
 
         # For the legend of the plot
         yellow_patch = patches.Patch(color=(0.91, 0.8, 0.18), label='Obstacles')
