@@ -1,9 +1,8 @@
 # Car MPC
-This repository contains two types of MPC controller that uses a linear kinematic bicycle model and a LQR controller.
-A state feedback and an output feedback based model predictive controller.
-The dynamics of the car are simulated with a nonlinear model.
+This repository contains two different MPC controllers: a state feedback and an output feedback based one that both use a linearized kinematic bicycle model. Besides there is also an LQR controller implementation.
+The car is assumed to be a point and the dynamics are simulated with a nonlinear model.
 The controller takes state and input constraints into account and has a terminal constraint to ensure stability.
-The control invariant set with the unconstrained LQR control law is used to compute the terminal set.
+A terminal set can be automatically constructed by finding a control invariant set around the goal using the unconstrained LQR control law.
 More information can be found in the [paper](media/paper.pdf), which also contains the proof that ensures asymptotic stability.
 
 ## Environments
